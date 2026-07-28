@@ -1,28 +1,106 @@
 from __future__ import annotations
 
 import time
+import json
 from pathlib import Path
 
-from flask import Flask, render_template, request, jsonify, Response
-from flask_sock import Sock
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
 
 from .kage import DEFAULT_OUT, list_mirrors, get_mirror, delete_mirror, kage_version
 from .manager import start_clone, get_job, get_jobs, start_pack
+from .auth import (
+    init_auth,
+    get_credentials,
+    require_auth,
+    is_authenticated,
+    generate_password,
+)
 
 app = Flask(__name__)
+app.secret_key = generate_password()
+
+# We'll import sock after app creation to avoid circular imports if needed
+# Flask-Sock doesn't use the app object for route registration in the same way,
+# but we keep it simple since we already have the app.
+from flask_sock import Sock
 sock = Sock(app)
+
+
+# ═══════════════════════════════════════
+# Public routes (no auth required)
+# ═══════════════════════════════════════
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    next_url = request.args.get("next", "/")
+
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        cfg_user, cfg_pass = get_credentials()
+        if username == cfg_user and password == cfg_pass:
+            session["kageboard_authenticated"] = True
+            session.permanent = True
+            return redirect(next_url)
+        return render_template("login.html", error="Invalid credentials", next=next_url)
+
+    # Already logged in
+    if is_authenticated():
+        return redirect(next_url)
+
+    return render_template("login.html", error=None, next=next_url)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("index"))
+
+
+@app.route("/api/auth/check")
+def api_auth_check():
+    """Check if the current request is authenticated."""
+    if is_authenticated():
+        return jsonify({"authenticated": True})
+    return jsonify({"authenticated": False, "auth_required": True}), 401
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_auth_login():
+    """Login for programmatic clients — returns session cookie + Basic creds hint."""
+    data = request.get_json() or {}
+    username = data.get("username", "")
+    password = data.get("password", "")
+
+    # Also check Basic Auth header
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Basic "):
+        import base64
+        try:
+            decoded = base64.b64decode(auth[6:]).decode("utf-8")
+            username, _, password = decoded.partition(":")
+        except Exception:
+            pass
+
+    cfg_user, cfg_pass = get_credentials()
+    if username == cfg_user and password == cfg_pass:
+        session["kageboard_authenticated"] = True
+        session.permanent = True
+        return jsonify({"authenticated": True, "username": cfg_user})
+
+    return jsonify({"error": "invalid credentials"}), 401
 
 
 @app.route("/")
 def index():
     mirrors = list_mirrors()
     version = kage_version()
-    return render_template("index.html", mirrors=mirrors, version=version)
+    authed = is_authenticated()
+    return render_template("index.html", mirrors=mirrors, version=version, authed=authed)
 
 
 @app.route("/mirrors")
 def mirrors_list():
-    """HTMX partial — mirror grid."""
     mirrors = list_mirrors()
     return render_template("_mirrors.html", mirrors=mirrors)
 
@@ -33,7 +111,6 @@ def mirror_detail(host: str):
     if not mirror:
         return "Not found", 404
 
-    # Build page listing
     pages = []
     if mirror.path.exists():
         for f in sorted(mirror.path.rglob("*.html")):
@@ -44,13 +121,12 @@ def mirror_detail(host: str):
                 "size": f.stat().st_size,
             })
 
-    return render_template("detail.html", mirror=mirror, pages=pages)
+    return render_template("detail.html", mirror=mirror, pages=pages, authed=is_authenticated())
 
 
 @app.route("/mirrors/<host>/browse")
 @app.route("/mirrors/<host>/browse/<path:subpath>")
 def mirror_browse(host: str, subpath: str = ""):
-    """Serve mirrored content through the app."""
     mirror = get_mirror(host)
     if not mirror:
         return "Not found", 404
@@ -66,7 +142,12 @@ def mirror_browse(host: str, subpath: str = ""):
     )
 
 
+# ═══════════════════════════════════════
+# API routes — read endpoints public, write endpoints require auth
+# ═══════════════════════════════════════
+
 @app.route("/api/clone", methods=["POST"])
+@require_auth
 def api_clone():
     data = request.get_json() or {}
     url = data.get("url", "").strip()
@@ -100,7 +181,6 @@ def api_jobs():
 
 @app.route("/api/mirrors")
 def api_mirrors():
-    """JSON list of mirrors for the extension."""
     mirrors = list_mirrors()
     return jsonify([
         {
@@ -113,7 +193,9 @@ def api_mirrors():
         for m in mirrors
     ])
 
+
 @app.route("/api/mirrors/<host>", methods=["DELETE"])
+@require_auth
 def api_delete_mirror(host: str):
     ok = delete_mirror(host)
     if ok:
@@ -122,6 +204,7 @@ def api_delete_mirror(host: str):
 
 
 @app.route("/api/mirrors/<host>/pack", methods=["POST"])
+@require_auth
 def api_pack(host: str):
     data = request.get_json() or {}
     fmt = data.get("format", "zim")
@@ -129,9 +212,12 @@ def api_pack(host: str):
     return jsonify({"job_id": job_id})
 
 
+# ═══════════════════════════════════════
+# WebSocket
+# ═══════════════════════════════════════
+
 @sock.route("/ws/clone/<job_id>")
 def ws_clone_progress(ws, job_id: str):
-    """WebSocket for live clone progress."""
     last_idx = 0
     while True:
         job = get_job(job_id)
@@ -139,14 +225,12 @@ def ws_clone_progress(ws, job_id: str):
             ws.send(json.dumps({"error": "job not found"}))
             break
 
-        # Send new output lines
         lines = job.get("lines", [])
         if last_idx < len(lines):
             for line in lines[last_idx:]:
                 ws.send(json.dumps({"type": "output", "line": line}))
             last_idx = len(lines)
 
-        # Send status update
         status = {
             "type": "status",
             "status": job["status"],
@@ -159,11 +243,14 @@ def ws_clone_progress(ws, job_id: str):
         if job["status"] in ("done", "error"):
             break
 
-        time.sleep(0.5)  # Poll every 500ms
+        time.sleep(0.5)
 
+
+# ═══════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════
 
 def _extract_title(path: Path) -> str:
-    """Extract <title> from an HTML file, fast."""
     try:
         text = path.read_text(errors="ignore")
         import re
@@ -179,7 +266,16 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Bind address")
     parser.add_argument("--port", type=int, default=5000, help="Bind port")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
+    parser.add_argument("--username", default=None, help="Basic auth username")
+    parser.add_argument("--password", default=None, help="Basic auth password (or set KAGEBOARD_PASSWORD)")
     args = parser.parse_args()
+
+    init_auth(username=args.username, password=args.password)
+    user, pwd = get_credentials()
+
+    if not args.username and not args.password:
+        print(f"🔐 Generated credentials — username: {user}  password: {pwd}")
+        print("   Set KAGEBOARD_USERNAME / KAGEBOARD_PASSWORD env vars to override.")
 
     app.run(host=args.host, port=args.port, debug=args.debug)
 

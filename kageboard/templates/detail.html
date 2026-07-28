@@ -10,8 +10,10 @@
     </div>
     <div class="action-buttons">
       <button class="btn btn-ghost" @click="browse()">Browse</button>
+      {% if authed %}
       <button class="btn btn-ghost" @click="packMirror('zim')" :disabled="packing">Pack ZIM</button>
       <button class="btn btn-danger-outline" @click="deleteMirror()" :disabled="deleting">Delete</button>
+      {% endif %}
     </div>
   </div>
 

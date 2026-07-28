@@ -4,11 +4,16 @@
 {% block content %}
 <div class="header-row">
   <h1>Mirrors</h1>
+  {% if authed %}
   <button class="btn btn-primary" @click="showClone = true" x-data="{showClone: false}">
     + New Clone
   </button>
+  {% else %}
+  <a href="/login" class="btn btn-primary">Sign In to Clone</a>
+  {% endif %}
 </div>
 
+{% if authed %}
 <!-- Clone panel -->
 <div x-data="cloneForm()" x-show="showClone" x-transition @keydown.escape="showClone = false"
      @clone-done.window="showClone = false; htmx.ajax('GET', '/mirrors', {target: '#mirror-grid'})"
@@ -54,6 +59,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- Mirror grid -->
 <div id="mirror-grid" hx-get="/mirrors" hx-trigger="load, every 30s" hx-swap="innerHTML">

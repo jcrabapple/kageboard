@@ -13,7 +13,12 @@
   <nav class="nav">
     <div class="nav-inner">
       <a href="/" class="logo">影 Kageboard</a>
-      <span class="nav-version">kage {{ version }}</span>
+      <div class="nav-right">
+        <span class="nav-version">kage {{ version }}</span>
+        {% if authed %}
+        <a href="/logout" class="nav-auth-link" title="Sign out">⏻</a>
+        {% endif %}
+      </div>
     </div>
   </nav>
 

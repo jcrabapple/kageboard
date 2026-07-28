@@ -13,6 +13,8 @@
       --border: #e5e7eb;
       --radius: 8px;
       --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --success: #10b981;
+      --error: #ef4444;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -26,6 +28,14 @@
       font-size: 1.2rem;
       font-weight: 650;
       margin-bottom: 20px;
+    }
+    h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
     }
     .form-group {
       margin-bottom: 16px;
@@ -69,6 +79,12 @@
       color: #fff;
     }
     .btn:hover { background: #1a56db; }
+    .btn-secondary {
+      background: #eef2ff;
+      color: var(--accent);
+      margin-left: 8px;
+    }
+    .btn-secondary:hover { background: #dde4ff; }
     .status {
       margin-top: 12px;
       padding: 8px 10px;
@@ -90,7 +106,22 @@
     <div class="hint">The address where Kageboard is running. Usually localhost.</div>
   </div>
 
-  <button class="btn" id="save-btn">Save</button>
+  <h3>Authentication</h3>
+
+  <div class="form-group">
+    <label for="auth-username">Username</label>
+    <input type="text" id="auth-username" placeholder="kageboard" autocomplete="username">
+  </div>
+
+  <div class="form-group">
+    <label for="auth-password">Password</label>
+    <input type="password" id="auth-password" placeholder="Set via Kageboard on first run" autocomplete="current-password">
+  </div>
+
+  <div>
+    <button class="btn" id="save-btn">Save</button>
+    <button class="btn btn-secondary" id="test-btn">Test Connection</button>
+  </div>
   <div class="status" id="status"></div>
 
   <script src="options.js"></script>

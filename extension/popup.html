@@ -28,7 +28,6 @@
     }
     .container { padding: 16px; }
 
-    /* Header */
     .header {
       display: flex;
       align-items: center;
@@ -43,17 +42,23 @@
       gap: 6px;
     }
     .logo-icon { font-size: 1.3rem; }
-    .settings-link {
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .settings-link, .logout-link {
       color: var(--text-muted);
       text-decoration: none;
       font-size: 1.1rem;
       padding: 4px;
       border-radius: var(--radius);
       transition: background 0.1s;
+      cursor: pointer;
     }
-    .settings-link:hover { background: var(--accent-subtle); }
+    .settings-link:hover, .logout-link:hover { background: var(--accent-subtle); }
+    .logout-link { font-size: 0.85rem; }
 
-    /* Current page */
     .current-page {
       background: var(--accent-subtle);
       border-radius: var(--radius);
@@ -79,10 +84,43 @@
       text-overflow: ellipsis;
     }
 
-    /* Options row */
-    .options {
+    /* Auth form */
+    .auth-section {
       margin-bottom: 12px;
     }
+    .auth-section .form-group {
+      margin-bottom: 8px;
+    }
+    .auth-section label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 550;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .auth-section input {
+      width: 100%;
+      padding: 7px 10px;
+      font-size: 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: var(--font);
+    }
+    .auth-section input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
+    .auth-error {
+      color: var(--error);
+      font-size: 0.78rem;
+      margin-bottom: 6px;
+      display: none;
+    }
+
+    .options { margin-bottom: 12px; }
     .option-row {
       display: flex;
       gap: 8px;
@@ -116,7 +154,6 @@
       color: var(--text-muted);
     }
 
-    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
@@ -145,7 +182,6 @@
     }
     .btn-secondary:hover { background: #dde4ff; }
 
-    /* Status */
     .status {
       margin-top: 10px;
       padding: 8px 10px;
@@ -177,7 +213,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Recent mirrors */
     .recent {
       margin-top: 14px;
       padding-top: 12px;
@@ -205,7 +240,10 @@
   <div class="container">
     <div class="header">
       <div class="logo"><span class="logo-icon">影</span> Kageboard</div>
-      <a href="#" class="settings-link" id="open-options" title="Settings">⚙</a>
+      <div class="header-right">
+        <a href="#" class="logout-link" id="logout-link" style="display:none" title="Sign out">Sign out</a>
+        <a href="#" class="settings-link" id="open-options" title="Settings">⚙</a>
+      </div>
     </div>
 
     <div class="current-page">
@@ -213,33 +251,50 @@
       <div class="page-url" id="page-url"></div>
     </div>
 
-    <div class="options">
-      <div class="toggle-row">
-        <label><input type="checkbox" id="opt-whole-site"> Whole site</label>
-        <label><input type="checkbox" id="opt-scroll"> Auto-scroll</label>
+    <!-- Auth section (shown when not authenticated) -->
+    <div class="auth-section" id="auth-section" style="display:none">
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" placeholder="kageboard" autocomplete="username">
       </div>
-      <div class="option-row" id="advanced-options" style="display:none">
-        <label>Max pages</label>
-        <input type="number" id="opt-max-pages" placeholder="all" min="1">
-        <label>Depth</label>
-        <input type="number" id="opt-max-depth" placeholder="all" min="1">
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
       </div>
+      <div class="auth-error" id="login-error"></div>
+      <button class="btn btn-primary" id="login-btn">Sign In</button>
     </div>
 
-    <button class="btn btn-primary" id="clone-btn">
-      <span id="btn-text">Save Page to Kageboard</span>
-      <span class="spinner" id="btn-spinner" style="display:none"></span>
-    </button>
+    <!-- Action section (shown when authenticated) -->
+    <div id="action-section" style="display:none">
+      <div class="options">
+        <div class="toggle-row">
+          <label><input type="checkbox" id="opt-whole-site"> Whole site</label>
+          <label><input type="checkbox" id="opt-scroll"> Auto-scroll</label>
+        </div>
+        <div class="option-row" id="advanced-options" style="display:none">
+          <label>Max pages</label>
+          <input type="number" id="opt-max-pages" placeholder="all" min="1">
+          <label>Depth</label>
+          <input type="number" id="opt-max-depth" placeholder="all" min="1">
+        </div>
+      </div>
 
-    <button class="btn btn-secondary" id="clone-site-btn" style="display:none">
-      Clone Entire Site
-    </button>
+      <button class="btn btn-primary" id="clone-btn">
+        <span id="btn-text">Save Page to Kageboard</span>
+        <span class="spinner" id="btn-spinner" style="display:none"></span>
+      </button>
 
-    <div class="status" id="status"></div>
+      <button class="btn btn-secondary" id="clone-site-btn" style="display:none">
+        Clone Entire Site
+      </button>
 
-    <div class="recent">
-      <h3>Recent Mirrors</h3>
-      <div id="recent-list">Loading…</div>
+      <div class="status" id="status"></div>
+
+      <div class="recent">
+        <h3>Recent Mirrors</h3>
+        <div id="recent-list">Loading…</div>
+      </div>
     </div>
   </div>
 

@@ -67,6 +67,21 @@ body { min-height: 100vh; }
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nav-auth-link {
+  font-size: 1rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  transition: background 0.1s;
+  line-height: 1;
+}
+.nav-auth-link:hover { background: var(--surface-alt); color: var(--text); }
 
 /* Main */
 .main {
