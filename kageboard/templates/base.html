@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Kageboard{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="https://unpkg.com/alpinejs@3.14.9" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="logo">影 Kageboard</a>
+      <span class="nav-version">kage {{ version }}</span>
+    </div>
+  </nav>
+
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="toast-container" x-data="toasts()" @new-toast.window="add($event.detail)">
+    <template x-for="t in items" :key="t.id">
+      <div class="toast" :class="t.kind" x-show="t.show" x-transition.opacity.duration.300ms
+           x-init="setTimeout(() => t.show = false, 4000)">
+        <span x-text="t.msg"></span>
+      </div>
+    </template>
+  </div>
+
+  <script>
+    function toasts() {
+      return {
+        items: [],
+        nextId: 0,
+        add(detail) {
+          const t = { id: ++this.nextId, msg: detail.msg, kind: detail.kind || 'info', show: true };
+          this.items.push(t);
+          setTimeout(() => { t.show = false }, 4000);
+          setTimeout(() => { this.items = this.items.filter(x => x.id !== t.id) }, 4500);
+        }
+      }
+    }
+
+    function formatBytes(b) {
+      if (!b || b === 0) return '0 B';
+      const u = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(b) / Math.log(1024));
+      return (b / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + u[i];
+    }
+
+    function formatDuration(s) {
+      if (!s) return '';
+      const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+      return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}{{ mirror.host }} — Kageboard{% endblock %}
+
+{% block content %}
+<div class="detail" x-data="detailView('{{ mirror.host }}')">
+  <div class="header-row">
+    <div>
+      <a href="/" class="back-link">← Back</a>
+      <h1>{{ mirror.host }}</h1>
+    </div>
+    <div class="action-buttons">
+      <button class="btn btn-ghost" @click="browse()">Browse</button>
+      <button class="btn btn-ghost" @click="packMirror('zim')" :disabled="packing">Pack ZIM</button>
+      <button class="btn btn-danger-outline" @click="deleteMirror()" :disabled="deleting">Delete</button>
+    </div>
+  </div>
+
+  <div class="detail-stats card">
+    <div class="stat-group">
+      <div class="stat-label">Pages</div><div class="stat-val">{{ mirror.page_count }}</div>
+    </div>
+    <div class="stat-group">
+      <div class="stat-label">Size</div><div class="stat-val">{{ "%.1f"|format(mirror.size_bytes / 1048576) if mirror.size_bytes > 1048576 else "%.0f"|format(mirror.size_bytes / 1024) ~ ' KB' }}</div>
+    </div>
+    <div class="stat-group">
+      <div class="stat-label">Path</div><div class="stat-val mono">{{ mirror.path }}</div>
+    </div>
+    {% if mirror.cloned_at %}
+    <div class="stat-group">
+      <div class="stat-label">Cloned</div><div class="stat-val">{{ mirror.cloned_at }}</div>
+    </div>
+    {% endif %}
+    {% if mirror.has_zim %}
+    <div class="stat-group">
+      <div class="stat-label">ZIM</div><div class="stat-val mono">{{ mirror.zim_path }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Browse frame -->
+  <div x-show="browsing" x-transition class="browser-frame">
+    <div class="browser-toolbar">
+      <span class="browser-url" x-text="browseUrl"></span>
+      <button class="btn btn-ghost btn-sm" @click="browsing = false">✕</button>
+    </div>
+    <iframe :src="browseUrl" class="browser-iframe" sandbox="allow-same-origin"></iframe>
+  </div>
+
+  <h2>Pages</h2>
+  <div class="page-list">
+    {% if pages %}
+      {% for p in pages[:200] %}
+        <a href="/mirrors/{{ mirror.host }}/browse/{{ p.path }}" class="page-row" target="_blank">
+          <span class="page-title">{{ p.title or p.path }}</span>
+          <span class="page-path mono">{{ p.path }}</span>
+          <span class="page-size">{{ "%.1f"|format(p.size / 1024) }} KB</span>
+        </a>
+      {% endfor %}
+      {% if pages|length > 200 %}
+        <div class="page-row muted">… and {{ pages|length - 200 }} more pages</div>
+      {% endif %}
+    {% else %}
+      <div class="empty-state"><p>No HTML pages found in this mirror.</p></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<script>
+function detailView(host) {
+  return {
+    browsing: false,
+    browseUrl: '',
+    packing: false,
+    deleting: false,
+
+    browse() {
+      this.browseUrl = `/mirrors/${host}/browse/`;
+      this.browsing = true;
+    },
+
+    packMirror(fmt) {
+      this.packing = true;
+      fetch(`/api/mirrors/${host}/pack`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format: fmt })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.job_id) {
+          window.dispatchEvent(new CustomEvent('new-toast', {
+            detail: { msg: 'Pack job started…', kind: 'info' }
+          }));
+        }
+        this.packing = false;
+      })
+      .catch(() => { this.packing = false; });
+    },
+
+    deleteMirror() {
+      if (!confirm(`Delete mirror for ${host}? This removes all local files.`)) return;
+      this.deleting = true;
+      fetch(`/api/mirrors/${host}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          window.dispatchEvent(new CustomEvent('new-toast', {
+            detail: { msg: `Deleted ${host}`, kind: 'success' }
+          }));
+          window.location.href = '/';
+        }
+      })
+      .catch(() => { this.deleting = false; });
+    }
+  }
+}
+</script>
+{% endblock %}

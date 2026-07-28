@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Kageboard — Mirrors{% endblock %}
+
+{% block content %}
+<div class="header-row">
+  <h1>Mirrors</h1>
+  <button class="btn btn-primary" @click="showClone = true" x-data="{showClone: false}">
+    + New Clone
+  </button>
+</div>
+
+<!-- Clone panel -->
+<div x-data="cloneForm()" x-show="showClone" x-transition @keydown.escape="showClone = false"
+     @clone-done.window="showClone = false; htmx.ajax('GET', '/mirrors', {target: '#mirror-grid'})"
+     style="display:none">
+  <div class="clone-panel card">
+    <h2>Clone a website</h2>
+    <form @submit.prevent="start">
+      <div class="form-group">
+        <label for="clone-url">URL</label>
+        <input id="clone-url" type="text" x-model="url" placeholder="example.com" autofocus required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="clone-pages">Max pages</label>
+          <input id="clone-pages" type="number" x-model="maxPages" placeholder="unlimited" min="1">
+        </div>
+        <div class="form-group">
+          <label for="clone-depth">Max depth</label>
+          <input id="clone-depth" type="number" x-model="maxDepth" placeholder="unlimited" min="1">
+        </div>
+      </div>
+      <div class="form-row checks">
+        <label><input type="checkbox" x-model="scroll"> Scroll (lazy load)</label>
+        <label><input type="checkbox" x-model="subdomains"> Subdomains</label>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" @click="showClone = false">Cancel</button>
+        <button type="submit" class="btn btn-primary" :disabled="running">
+          <span x-show="!running">Start Clone</span>
+          <span x-show="running" class="spinner"></span>
+        </button>
+      </div>
+    </form>
+
+    <!-- Progress -->
+    <div x-show="running" class="clone-progress">
+      <div class="progress-bar"><div class="fill" :style="`width:${pct}%`"></div></div>
+      <div class="progress-stats">
+        <span x-text="statusText"></span>
+        <span x-text="pages + ' pages'"></span>
+      </div>
+      <pre class="clone-log" x-ref="log" x-html="logLines.slice(-20).join('\n')"></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Mirror grid -->
+<div id="mirror-grid" hx-get="/mirrors" hx-trigger="load, every 30s" hx-swap="innerHTML">
+  {% include "_mirrors.html" %}
+</div>
+
+{% endblock %}
+
+{% block head %}
+<script>
+function cloneForm() {
+  return {
+    showClone: false,
+    url: '',
+    maxPages: null,
+    maxDepth: null,
+    scroll: false,
+    subdomains: false,
+    running: false,
+    pages: 0,
+    pct: 0,
+    statusText: 'Connecting...',
+    logLines: [],
+    ws: null,
+
+    start() {
+      if (!this.url.trim()) return;
+      this.running = true;
+      this.logLines = [];
+      this.pages = 0;
+      this.pct = 0;
+      this.statusText = 'Starting...';
+
+      const body = { url: this.url.trim() };
+      if (this.maxPages) body.max_pages = parseInt(this.maxPages);
+      if (this.maxDepth) body.max_depth = parseInt(this.maxDepth);
+      if (this.scroll) body.scroll = true;
+      if (this.subdomains) body.subdomains = true;
+
+      fetch('/api/clone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          this.statusText = 'Error: ' + data.error;
+          this.running = false;
+          return;
+        }
+        this.connectWs(data.job_id);
+      })
+      .catch(err => {
+        this.statusText = 'Error: ' + err.message;
+        this.running = false;
+      });
+    },
+
+    connectWs(jobId) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.ws = new WebSocket(`${proto}//${location.host}/ws/clone/${jobId}`);
+      this.ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'output') {
+          this.logLines.push(msg.line);
+          this.$nextTick(() => {
+            const log = this.$refs.log;
+            if (log) log.scrollTop = log.scrollHeight;
+          });
+        } else if (msg.type === 'status') {
+          this.statusText = msg.status === 'running' ? 'Cloning...' :
+                            msg.status === 'done' ? 'Done!' : 'Error';
+          this.pages = msg.pages;
+          this.pct = Math.min(99, msg.pages * 5); // rough heuristic
+          if (msg.status !== 'running') {
+            this.pct = msg.status === 'done' ? 100 : 0;
+            this.running = false;
+            this.ws.close();
+            window.dispatchEvent(new CustomEvent('new-toast', {
+              detail: { msg: `Clone ${msg.status === 'done' ? 'complete' : 'failed'}: ${this.url}`, kind: msg.status === 'done' ? 'success' : 'error' }
+            }));
+            window.dispatchEvent(new Event('clone-done'));
+          }
+        }
+      };
+      this.ws.onerror = () => {
+        this.statusText = 'Connection lost';
+        this.running = false;
+      };
+    }
+  }
+}
+</script>
+{% endblock %}

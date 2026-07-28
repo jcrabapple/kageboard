@@ -1,0 +1,22 @@
+<div class="mirror-grid">
+  {% if mirrors %}
+    {% for m in mirrors %}
+      <a href="/mirrors/{{ m.host }}" class="mirror-card card">
+        <div class="mirror-host">{{ m.host }}</div>
+        <div class="mirror-meta">
+          <span class="stat">{{ m.page_count }} pages</span>
+          <span class="stat">{{ "%.1f"|format(m.size_bytes / 1048576) if m.size_bytes > 1048576 else "%.0f"|format(m.size_bytes / 1024) ~ ' KB' }}</span>
+        </div>
+        <div class="mirror-badges">
+          {% if m.has_zim %}<span class="badge badge-zim">ZIM</span>{% endif %}
+          {% if m.cloned_at %}<span class="badge badge-date">{{ m.cloned_at[:10] }}</span>{% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">
+      <p>No mirrors yet.</p>
+      <p class="sub">Clone a website to get started.</p>
+    </div>
+  {% endif %}
+</div>
