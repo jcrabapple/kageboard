@@ -98,6 +98,21 @@ def api_jobs():
     return jsonify(get_jobs())
 
 
+@app.route("/api/mirrors")
+def api_mirrors():
+    """JSON list of mirrors for the extension."""
+    mirrors = list_mirrors()
+    return jsonify([
+        {
+            "host": m.host,
+            "page_count": m.page_count,
+            "size_bytes": m.size_bytes,
+            "has_zim": m.has_zim,
+            "cloned_at": m.cloned_at,
+        }
+        for m in mirrors
+    ])
+
 @app.route("/api/mirrors/<host>", methods=["DELETE"])
 def api_delete_mirror(host: str):
     ok = delete_mirror(host)

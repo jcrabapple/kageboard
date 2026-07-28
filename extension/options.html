@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kageboard Settings</title>
+  <style>
+    :root {
+      --bg: #fff;
+      --text: #1a1a2e;
+      --text-muted: #6b7280;
+      --accent: #2d6df6;
+      --border: #e5e7eb;
+      --radius: 8px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+      padding: 24px;
+    }
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 650;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 550;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 0.875rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--font);
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px #eef2ff;
+    }
+    .form-group .hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .btn {
+      padding: 8px 20px;
+      font-size: 0.85rem;
+      font-weight: 550;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-family: var(--font);
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn:hover { background: #1a56db; }
+    .status {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      display: none;
+    }
+    .status.show { display: block; }
+    .status.success { background: #ecfdf5; color: #065f46; }
+    .status.error { background: #fef2f2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h2>Kageboard Settings</h2>
+
+  <div class="form-group">
+    <label for="server-url">Server URL</label>
+    <input type="text" id="server-url" placeholder="http://127.0.0.1:5000">
+    <div class="hint">The address where Kageboard is running. Usually localhost.</div>
+  </div>
+
+  <button class="btn" id="save-btn">Save</button>
+  <div class="status" id="status"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>

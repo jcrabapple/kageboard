@@ -40,6 +40,17 @@ Or run directly:
 python3 -m kageboard.cli --port 5000
 ```
 
+### Browser Extension
+
+The `extension/` directory contains a Chrome/Firefox extension for one-click saving:
+
+1. Open `chrome://extensions` (Chrome) or `about:addons` (Firefox)
+2. Enable "Developer mode" (Chrome) or click the gear → "Debug Add-ons" (Firefox)
+3. "Load unpacked" → select the `extension/` folder
+4. Click the 影 icon in your toolbar on any page to save it to Kageboard
+
+The extension supports **save current page** or **clone entire site** with configurable depth and scope. It lists your recent mirrors in the popup and links to the Kageboard dashboard.
+
 ### CLI Options
 
 | Flag | Default | Meaning |

@@ -57,3 +57,10 @@ def test_api_delete_404(client):
 def test_api_job_status_404(client):
     r = client.get("/api/jobs/nonexistent")
     assert r.status_code == 404
+
+
+def test_api_mirrors_empty(client):
+    r = client.get("/api/mirrors")
+    assert r.status_code == 200
+    data = json.loads(r.data)
+    assert data == []
