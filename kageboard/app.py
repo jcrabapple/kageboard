@@ -4,13 +4,16 @@ import time
 import json
 from pathlib import Path
 
+import mimetypes
+
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
 
-from .kage import DEFAULT_OUT, list_mirrors, get_mirror, delete_mirror, kage_version
-from .manager import start_clone, get_job, get_jobs, start_pack
+from .kage import DEFAULT_OUT, list_mirrors, get_mirror, delete_mirror, kage_version, KageNotFoundError
+from .manager import start_clone, get_job, get_job_raw, get_jobs, start_pack
 from .auth import (
     init_auth,
     get_credentials,
+    check_credentials,
     require_auth,
     is_authenticated,
     generate_password,
@@ -37,8 +40,7 @@ def login_page():
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        cfg_user, cfg_pass = get_credentials()
-        if username == cfg_user and password == cfg_pass:
+        if check_credentials(username, password):
             session["kageboard_authenticated"] = True
             session.permanent = True
             return redirect(next_url)
@@ -82,8 +84,8 @@ def api_auth_login():
         except Exception:
             pass
 
-    cfg_user, cfg_pass = get_credentials()
-    if username == cfg_user and password == cfg_pass:
+    cfg_user, _ = get_credentials()
+    if check_credentials(username, password):
         session["kageboard_authenticated"] = True
         session.permanent = True
         return jsonify({"authenticated": True, "username": cfg_user})
@@ -131,13 +133,20 @@ def mirror_browse(host: str, subpath: str = ""):
     if not mirror:
         return "Not found", 404
 
-    file_path = mirror.path / subpath if subpath else mirror.path / "index.html"
+    # Resolve and validate path stays within the mirror directory
+    file_path = (mirror.path / subpath).resolve() if subpath else (mirror.path / "index.html").resolve()
+    if not file_path.is_relative_to(mirror.path.resolve()):
+        return "Forbidden", 403
     if not file_path.exists():
         return "Not found", 404
 
+    mimetype, _ = mimetypes.guess_type(str(file_path))
+    if mimetype is None:
+        mimetype = "application/octet-stream"
+
     return Response(
         file_path.read_bytes(),
-        mimetype="text/html",
+        mimetype=mimetype,
         headers={"X-Kageboard-Host": host},
     )
 
@@ -159,7 +168,10 @@ def api_clone():
         if f in data and data[f]:
             flags[f] = data[f]
 
-    job_id = start_clone(url, **flags)
+    try:
+        job_id = start_clone(url, **flags)
+    except KageNotFoundError as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify({"job_id": job_id})
 
 
@@ -208,7 +220,10 @@ def api_delete_mirror(host: str):
 def api_pack(host: str):
     data = request.get_json() or {}
     fmt = data.get("format", "zim")
-    job_id = start_pack(host, fmt)
+    try:
+        job_id = start_pack(host, fmt)
+    except KageNotFoundError as e:
+        return jsonify({"error": str(e)}), 500
     return jsonify({"job_id": job_id})
 
 
@@ -220,7 +235,7 @@ def api_pack(host: str):
 def ws_clone_progress(ws, job_id: str):
     last_idx = 0
     while True:
-        job = get_job(job_id)
+        job = get_job_raw(job_id)
         if not job:
             ws.send(json.dumps({"error": "job not found"}))
             break

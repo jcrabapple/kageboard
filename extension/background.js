@@ -9,7 +9,7 @@ async function getServer() {
 }
 
 async function getCredentials() {
-  const data = await chrome.storage.sync.get(['username', 'password']);
+  const data = await chrome.storage.local.get(['username', 'password']);
   return {
     username: data.username || 'kageboard',
     password: data.password || '',
@@ -107,7 +107,7 @@ async function checkAuth() {
 }
 
 async function saveCredentials(username, password) {
-  await chrome.storage.sync.set({ username, password });
+  await chrome.storage.local.set({ username, password });
   return { ok: true };
 }
 

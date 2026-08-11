@@ -22,7 +22,7 @@
       <div class="stat-label">Pages</div><div class="stat-val">{{ mirror.page_count }}</div>
     </div>
     <div class="stat-group">
-      <div class="stat-label">Size</div><div class="stat-val">{{ "%.1f"|format(mirror.size_bytes / 1048576) if mirror.size_bytes > 1048576 else "%.0f"|format(mirror.size_bytes / 1024) ~ ' KB' }}</div>
+      <div class="stat-label">Size</div><div class="stat-val">{{ "%.1f"|format(mirror.size_bytes / 1048576) ~ ' MB' if mirror.size_bytes > 1048576 else "%.0f"|format(mirror.size_bytes / 1024) ~ ' KB' }}</div>
     </div>
     <div class="stat-group">
       <div class="stat-label">Path</div><div class="stat-val mono">{{ mirror.path }}</div>

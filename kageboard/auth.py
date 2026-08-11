@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import base64
+import hmac
 import secrets
 from functools import wraps
 
@@ -28,6 +29,15 @@ def get_credentials() -> tuple[str, str]:
     return (_username or DEFAULT_USERNAME, _password or DEFAULT_PASSWORD)
 
 
+def check_credentials(user: str, pwd: str) -> bool:
+    """Constant-time credential comparison."""
+    cfg_user, cfg_pass = get_credentials()
+    # Compare both fields with compare_digest to avoid timing side-channels
+    user_ok = hmac.compare_digest(user, cfg_user)
+    pass_ok = hmac.compare_digest(pwd, cfg_pass)
+    return user_ok and pass_ok
+
+
 def _check_basic() -> bool:
     """Check HTTP Basic Auth header."""
     auth = request.headers.get("Authorization", "")
@@ -36,7 +46,7 @@ def _check_basic() -> bool:
     try:
         decoded = base64.b64decode(auth[6:]).decode("utf-8")
         user, _, pwd = decoded.partition(":")
-        return user == _username and pwd == _password
+        return check_credentials(user, pwd)
     except Exception:
         return False
 

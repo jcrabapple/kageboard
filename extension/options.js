@@ -33,6 +33,7 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
+  // Server URL is not sensitive — sync is fine. Credentials use storage.local.
   await chrome.storage.sync.set({ server_url: url });
 
   try {
