@@ -4,8 +4,10 @@ Web dashboard for [Kage](https://github.com/tamnd/kage) — manage, clone, brows
 
 Kage is a fantastic CLI for freezing websites into offline mirrors. Kageboard gives it a web UI so you can manage your library of mirrors without remembering flags.
 
-![Kageboard Dashboard](docs/dashboard.png)
-![Mirror Detail](docs/mirror-detail.png)
+![Kageboard Dashboard (light)](docs/dashboard-light.png)
+![Mirror Detail (light)](docs/detail-light.png)
+![Kageboard Dashboard (dark)](docs/dashboard-dark.png)
+![Mirror Detail (dark)](docs/detail-dark.png)
 
 ## Features
 
@@ -15,6 +17,7 @@ Kage is a fantastic CLI for freezing websites into offline mirrors. Kageboard gi
 - **Pack to ZIM** — trigger ZIM archive creation from the UI
 - **Delete mirrors** — clean up old mirrors with one click
 - **Basic auth** — write operations (clone, delete, pack) behind authentication; read-only endpoints public
+- **Dark mode** — automatic via `prefers-color-scheme` with manual toggle; preference saved to localStorage
 - **Chrome/Firefox extension** — one-click "save this page" from the toolbar
 - **htmx + Alpine.js** — lightweight interactivity, no build step, no SPA framework
 
@@ -131,7 +134,6 @@ pytest tests/ -v
 - [ ] Search across mirrors (full-text on page titles/content)
 - [ ] Batch operations (delete multiple, pack multiple)
 - [ ] ZIM viewer integration (serve packed archives in-browser)
-- [ ] Dark mode
 - [ ] Docker image (bundle Kage + Kageboard)
 - [ ] Extension: context menu "Save this page to Kageboard"
 

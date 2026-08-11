@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Kageboard{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/style.css">
+  <script>
+    // Prevent flash of wrong theme — set before CSS loads
+    (function() {
+      const stored = localStorage.getItem('kageboard-theme');
+      if (stored) {
+        document.documentElement.setAttribute('data-theme', stored);
+      }
+    })();
+  </script>
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <script src="https://unpkg.com/alpinejs@3.14.9" defer></script>
   {% block head %}{% endblock %}
@@ -12,9 +21,12 @@
 <body>
   <nav class="nav">
     <div class="nav-inner">
-      <a href="/" class="logo">影 Kageboard</a>
+      <a href="/" class="logo"><span class="kanji">影</span> Kageboard</a>
       <div class="nav-right">
         <span class="nav-version">kage {{ version }}</span>
+        <a href="#" class="theme-toggle" onclick="toggleTheme(event)" title="Toggle theme" aria-label="Toggle theme">
+          <span id="theme-icon">🌙</span>
+        </a>
         {% if authed %}
         <a href="/logout" class="nav-auth-link" title="Sign out">⏻</a>
         {% endif %}
@@ -61,6 +73,32 @@
       const m = Math.floor(s / 60), sec = Math.floor(s % 60);
       return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
     }
+
+    // Theme toggle
+    function toggleTheme(e) {
+      e.preventDefault();
+      const current = document.documentElement.getAttribute('data-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = current === 'dark' || (!current && prefersDark);
+      const next = isDark ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('kageboard-theme', next);
+      updateThemeIcon(next);
+    }
+
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('theme-icon');
+      if (!icon) return;
+      icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+
+    // Set icon on load
+    (function() {
+      const stored = localStorage.getItem('kageboard-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = stored === 'dark' || (!stored && prefersDark);
+      updateThemeIcon(isDark ? 'dark' : 'light');
+    })();
   </script>
 </body>
 </html>

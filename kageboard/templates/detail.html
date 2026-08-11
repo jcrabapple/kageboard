@@ -17,7 +17,7 @@
     </div>
   </div>
 
-  <div class="detail-stats card">
+  <div class="detail-stats card" style="padding:0; overflow:hidden;">
     <div class="stat-group">
       <div class="stat-label">Pages</div><div class="stat-val">{{ mirror.page_count }}</div>
     </div>
@@ -48,7 +48,7 @@
     <iframe :src="browseUrl" class="browser-iframe" sandbox="allow-same-origin"></iframe>
   </div>
 
-  <h2>Pages</h2>
+  <h2 style="margin-bottom: 12px;">Pages</h2>
   <div class="page-list">
     {% if pages %}
       {% for p in pages[:200] %}
