@@ -109,7 +109,14 @@ def _update_job_outcomes() -> None:
             if not job_id:
                 continue
             job = get_job(job_id)
-            if job and job.get("status") in ("done", "error"):
+            if job is None:
+                # Process restarted — the in-memory job is gone, so the
+                # outcome is unknowable. Clear the pointer or the UI shows
+                # "running" forever.
+                entry["last_job_id"] = None
+                entry["last_status"] = entry.get("last_status") or "unknown"
+                changed = True
+            elif job.get("status") in ("done", "error"):
                 entry["last_status"] = job["status"]
                 entry["last_job_id"] = None
                 changed = True

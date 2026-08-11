@@ -2,7 +2,7 @@
 {% block title %}{{ mirror.host }} — Kageboard{% endblock %}
 
 {% block content %}
-<div class="detail" x-data="detailView('{{ mirror.host }}')">
+<div class="detail" x-data="detailView({{ mirror.host|tojson }})">
   <div class="header-row">
     <div>
       <a href="/" class="back-link">← Back</a>
@@ -261,10 +261,12 @@ function detailView(host) {
     },
 
     pollPack(jobId) {
+      let failures = 0;
       const timer = setInterval(() => {
         fetch(`/api/jobs/${jobId}`)
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error('poll failed'); return r.json(); })
         .then(job => {
+          failures = 0;
           if (job.status && job.status !== 'running') {
             clearInterval(timer);
             this.packing = false;
@@ -279,7 +281,15 @@ function detailView(host) {
             }
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (++failures >= 10) {
+            clearInterval(timer);
+            this.packing = false;
+            window.dispatchEvent(new CustomEvent('new-toast', {
+              detail: { msg: `Lost contact with pack job for ${host}`, kind: 'error' }
+            }));
+          }
+        });
       }, 2000);
     },
 

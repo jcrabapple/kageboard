@@ -9,7 +9,7 @@ import mimetypes
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for, send_file
 
 from .kage import DEFAULT_OUT, list_mirrors, get_mirror, delete_mirror, kage_version, KageNotFoundError, get_artifact_path
-from .manager import start_clone, get_job, get_job_raw, get_jobs, start_pack
+from .manager import start_clone, get_job, get_job_raw, get_jobs, start_pack, get_job_stream_snapshot
 from . import scheduler
 from .auth import (
     init_auth,
@@ -21,7 +21,34 @@ from .auth import (
 )
 
 app = Flask(__name__)
-app.secret_key = generate_password()
+def _load_or_create_secret_key() -> str:
+    """Stable Flask secret key: env override, else a persisted file.
+
+    Regenerating per start logs everyone out on restart and breaks sessions
+    outright under multi-worker serving.
+    """
+    import os
+    import secrets
+
+    env = os.environ.get("KAGEBOARD_SECRET_KEY")
+    if env:
+        return env
+    path = Path.home() / ".config" / "kageboard" / "secret_key"
+    try:
+        if path.exists():
+            key = path.read_text().strip()
+            if key:
+                return key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        key = secrets.token_urlsafe(32)
+        path.write_text(key)
+        path.chmod(0o600)
+        return key
+    except OSError:
+        return secrets.token_urlsafe(32)  # ephemeral fallback
+
+
+app.secret_key = _load_or_create_secret_key()
 
 # We'll import sock after app creation to avoid circular imports if needed
 # Flask-Sock doesn't use the app object for route registration in the same way,
@@ -138,18 +165,16 @@ def mirror_browse(host: str, subpath: str = ""):
     file_path = (mirror.path / subpath).resolve() if subpath else (mirror.path / "index.html").resolve()
     if not file_path.is_relative_to(mirror.path.resolve()):
         return "Forbidden", 403
-    if not file_path.exists():
+    if not file_path.is_file():
         return "Not found", 404
 
     mimetype, _ = mimetypes.guess_type(str(file_path))
     if mimetype is None:
         mimetype = "application/octet-stream"
 
-    return Response(
-        file_path.read_bytes(),
-        mimetype=mimetype,
-        headers={"X-Kageboard-Host": host},
-    )
+    resp = send_file(file_path, mimetype=mimetype, conditional=True)
+    resp.headers["X-Kageboard-Host"] = host
+    return resp
 
 
 # ═══════════════════════════════════════
@@ -185,6 +210,7 @@ def api_clone():
 
 
 @app.route("/api/jobs/<job_id>")
+@require_auth
 def api_job_status(job_id: str):
     job = get_job(job_id)
     if not job:
@@ -196,6 +222,7 @@ def api_job_status(job_id: str):
 
 
 @app.route("/api/jobs")
+@require_auth
 def api_jobs():
     return jsonify(get_jobs())
 
@@ -220,6 +247,7 @@ def api_mirrors():
 def api_delete_mirror(host: str):
     ok = delete_mirror(host)
     if ok:
+        scheduler.set_schedule(host, "off")  # don't resurrect schedules on re-clone
         return jsonify({"ok": True})
     return jsonify({"error": "not found"}), 404
 
@@ -247,7 +275,7 @@ def api_download(host: str, kind: str):
     path = get_artifact_path(host, kind)
     if path is None:
         return jsonify({"error": "not found"}), 404
-    return send_file(path, as_attachment=True)
+    return send_file(path, as_attachment=True, download_name=path.name, max_age=0)
 
 
 @app.route("/api/mirrors/<host>/schedule", methods=["GET"])
@@ -293,14 +321,17 @@ def api_refresh(host: str):
 
 @sock.route("/ws/clone/<job_id>")
 def ws_clone_progress(ws, job_id: str):
+    if not is_authenticated():
+        ws.send(json.dumps({"type": "status", "status": "unauthorized"}))
+        return
     last_idx = 0
     while True:
-        job = get_job_raw(job_id)
+        job = get_job_stream_snapshot(job_id)
         if not job:
             ws.send(json.dumps({"error": "job not found"}))
             break
 
-        lines = job.get("lines", [])
+        lines = job["lines"]
         if last_idx < len(lines):
             for line in lines[last_idx:]:
                 ws.send(json.dumps({"type": "output", "line": line}))

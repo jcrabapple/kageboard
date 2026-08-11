@@ -155,3 +155,49 @@ def test_tick_records_finished_job_status(sched_dir):
 def test_start_is_idempotent():
     scheduler.start(tick_seconds=3600)
     scheduler.start(tick_seconds=3600)  # no exception, single thread
+
+
+def test_tick_reconciles_stale_job_after_restart(sched_dir):
+    """A last_job_id pointing at a lost in-memory job is cleared, not
+    left showing 'running' forever."""
+    _mk_mirror(sched_dir, "example.com")
+    scheduler.set_schedule("example.com", "daily")
+    schedules = scheduler.load_schedules()
+    schedules["example.com"]["last_run"] = time.time()
+    schedules["example.com"]["last_job_id"] = "job-lost-in-restart"
+    scheduler.save_schedules(schedules)
+
+    scheduler.tick()
+    entry = scheduler.get_schedule("example.com")
+    assert entry["last_job_id"] is None
+    assert entry["last_status"] == "unknown"
+
+
+# ── manager hygiene ──
+
+
+def test_host_from_url_variants():
+    from kageboard.manager import _host_from_url
+    assert _host_from_url("https://example.com/path") == "example.com"
+    assert _host_from_url("HTTPS://EXAMPLE.com/") == "example.com"
+    assert _host_from_url("example.com") == "example.com"
+    assert _host_from_url("example.com/docs/") == "example.com"
+
+
+def test_prune_jobs_evicts_old_finished():
+    from kageboard.manager import _jobs, _job_lock, _prune_jobs
+    with _job_lock:
+        _jobs["old-done"] = {"id": "old-done", "status": "done",
+                             "finished_at": time.time() - 7200, "proc": None, "lines": []}
+        _jobs["fresh-done"] = {"id": "fresh-done", "status": "done",
+                               "finished_at": time.time(), "proc": None, "lines": []}
+        _jobs["still-running"] = {"id": "still-running", "status": "running",
+                                  "proc": None, "lines": []}
+    _prune_jobs()
+    with _job_lock:
+        assert "old-done" not in _jobs
+        assert "fresh-done" in _jobs
+        assert "still-running" in _jobs
+    with _job_lock:
+        del _jobs["fresh-done"]
+        del _jobs["still-running"]

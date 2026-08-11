@@ -228,7 +228,7 @@ def parse_clone_output(line: str) -> dict | None:
     if m:
         return {"type": "page", "current": int(m.group(1)), "total": int(m.group(2))}
 
-    m = re.match(r"Done\.\s+(\d+)\s+pages?,\s+(\d+)\s+assets?,?\s+(\d+)?\s*errors?", line)
+    m = re.match(r"Done\.\s+(\d+)\s+pages?,\s+(\d+)\s+assets?(?:,?\s+(\d+)\s*errors?)?", line)
     if m:
         return {
             "type": "done",

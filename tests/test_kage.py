@@ -185,6 +185,12 @@ def test_parse_clone_output_singular_page():
     assert result == {"type": "done", "pages": 1, "assets": 5, "errors": 0}
 
 
+def test_parse_clone_output_done_without_errors_clause():
+    """Done line omitting the errors clause still parses, errors default 0."""
+    result = parse_clone_output("Done. 42 pages, 156 assets")
+    assert result == {"type": "done", "pages": 42, "assets": 156, "errors": 0}
+
+
 # ── clone() command building ──
 
 

@@ -78,10 +78,16 @@ def test_mirrors_partial(client):
     assert b"mirror-grid" in r.data
 
 
-def test_api_jobs_empty(client):
-    r = client.get("/api/jobs")
+def test_api_jobs_empty(client, auth_headers):
+    r = client.get("/api/jobs", headers=auth_headers)
     assert r.status_code == 200
     assert json.loads(r.data) == []
+
+
+def test_api_jobs_require_auth(client):
+    """Job listings leak in-flight clone URLs — auth required."""
+    assert client.get("/api/jobs").status_code == 401
+    assert client.get("/api/jobs/some-job").status_code == 401
 
 
 def test_api_clone_no_url(client, auth_headers):
@@ -159,8 +165,8 @@ def test_api_delete_unauthorized(client):
     assert r.status_code == 401
 
 
-def test_api_job_status_404(client):
-    r = client.get("/api/jobs/nonexistent")
+def test_api_job_status_404(client, auth_headers):
+    r = client.get("/api/jobs/nonexistent", headers=auth_headers)
     assert r.status_code == 404
 
 
@@ -399,7 +405,7 @@ def test_api_delete_path_traversal(client, tmp_mirror_dir, auth_headers):
     shutil.rmtree(outside)
 
 
-def test_api_jobs_excludes_lines(client):
+def test_api_jobs_excludes_lines(client, auth_headers):
     """Jobs endpoint doesn't leak stdout lines."""
     from kageboard.manager import _jobs, _job_lock
     with _job_lock:
@@ -412,7 +418,7 @@ def test_api_jobs_excludes_lines(client):
             "started_at": 0,
         }
 
-    r = client.get("/api/jobs")
+    r = client.get("/api/jobs", headers=auth_headers)
     data = json.loads(r.data)
     assert len(data) == 1
     job = data[0]
@@ -422,7 +428,7 @@ def test_api_jobs_excludes_lines(client):
     assert job["pages"] == 5
 
 
-def test_api_job_status_excludes_lines(client):
+def test_api_job_status_excludes_lines(client, auth_headers):
     """Individual job status endpoint doesn't leak stdout lines."""
     from kageboard.manager import _jobs, _job_lock
     with _job_lock:
@@ -435,7 +441,7 @@ def test_api_job_status_excludes_lines(client):
             "started_at": 0,
         }
 
-    r = client.get("/api/jobs/test-job-2")
+    r = client.get("/api/jobs/test-job-2", headers=auth_headers)
     data = json.loads(r.data)
     assert "lines" not in data
     assert "proc" not in data
@@ -457,3 +463,52 @@ def test_api_auth_login_uses_check_credentials(client):
                     headers={"Authorization": f"Basic {creds}"})
     assert r.status_code == 200
     assert r.get_json()["authenticated"] is True
+
+
+# ── Review-fix regression tests ──
+
+
+def test_browse_directory_returns_404_not_500(client, tmp_mirror_dir):
+    """Browsing a subdirectory 404s instead of crashing on read_bytes."""
+    r = client.get("/mirrors/example.com/browse/sub/")
+    assert r.status_code == 404
+
+
+def test_browse_streams_with_host_header(client, tmp_mirror_dir):
+    r = client.get("/mirrors/example.com/browse/index.html")
+    assert r.status_code == 200
+    assert r.headers.get("X-Kageboard-Host") == "example.com"
+
+
+def test_delete_mirror_clears_schedule(client, tmp_mirror_dir, auth_headers):
+    """Deleting a mirror removes its auto-refresh schedule."""
+    from kageboard import scheduler
+    scheduler.set_schedule("example.com", "daily")
+    r = client.delete("/api/mirrors/example.com", headers=auth_headers)
+    assert r.status_code == 200
+    assert scheduler.get_schedule("example.com") is None
+
+
+def test_detail_page_escapes_host_in_xdata(client, tmp_mirror_dir):
+    """mirror.host goes through tojson — no raw quotes in the JS context."""
+    r = client.get("/mirrors/example.com")
+    assert r.status_code == 200
+    assert b'detailView(&#34;example.com&#34;)' in r.data or \
+           b'detailView("example.com")' in r.data or \
+           b"detailView(\\u0022example.com\\u0022)" in r.data
+
+
+def test_secret_key_persists(tmp_path, monkeypatch):
+    """Secret key comes from env when set, else a stable file."""
+    import importlib
+    import kageboard.app as app_mod
+
+    monkeypatch.setenv("KAGEBOARD_SECRET_KEY", "from-env")
+    assert app_mod._load_or_create_secret_key() == "from-env"
+
+    monkeypatch.delenv("KAGEBOARD_SECRET_KEY")
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    first = app_mod._load_or_create_secret_key()
+    second = app_mod._load_or_create_secret_key()
+    assert first == second
+    assert (tmp_path / ".config" / "kageboard" / "secret_key").exists()
