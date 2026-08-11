@@ -427,6 +427,22 @@ body {
   width: 15px;
   height: 15px;
 }
+.advanced {
+  margin-bottom: 16px;
+}
+.advanced summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+}
+.advanced[open] summary {
+  margin-bottom: 14px;
+}
+.advanced summary:hover {
+  color: var(--text);
+}
 .form-actions {
   display: flex;
   gap: 8px;

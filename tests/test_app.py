@@ -96,6 +96,48 @@ def test_api_clone_unauthorized(client):
     assert r.status_code == 401
 
 
+def test_api_clone_advanced_flags(client, auth_headers, monkeypatch):
+    """Advanced clone options are forwarded to start_clone."""
+    calls = {}
+
+    def fake_start_clone(url, **flags):
+        calls["url"] = url
+        calls["flags"] = flags
+        return "job-adv-1"
+
+    monkeypatch.setattr("kageboard.app.start_clone", fake_start_clone)
+    r = client.post("/api/clone", json={
+        "url": "example.com",
+        "scope_prefix": "/docs",
+        "exclude": ["/archive", " /tags ", ""],
+        "keep_media": True,
+        "mobile": True,
+        "force": True,
+    }, headers=auth_headers)
+    assert r.status_code == 200
+    f = calls["flags"]
+    assert f["scope_prefix"] == "/docs"
+    assert f["exclude"] == ["/archive", "/tags"]  # stripped, empties dropped
+    assert f["keep_media"] is True
+    assert f["mobile"] is True
+    assert f["force"] is True
+
+
+def test_api_clone_exclude_not_list_ignored(client, auth_headers, monkeypatch):
+    """A non-list exclude value is ignored rather than crashing."""
+    calls = {}
+
+    def fake_start_clone(url, **flags):
+        calls["flags"] = flags
+        return "job-adv-2"
+
+    monkeypatch.setattr("kageboard.app.start_clone", fake_start_clone)
+    r = client.post("/api/clone", json={"url": "example.com", "exclude": "/archive"},
+                    headers=auth_headers)
+    assert r.status_code == 200
+    assert "exclude" not in calls["flags"]
+
+
 def test_static_css(client):
     r = client.get("/static/css/style.css")
     assert r.status_code == 200

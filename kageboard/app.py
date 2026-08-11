@@ -164,9 +164,17 @@ def api_clone():
         return jsonify({"error": "URL required"}), 400
 
     flags = {}
-    for f in ["max_pages", "max_depth", "scope_prefix", "scroll", "subdomains"]:
+    for f in ["max_pages", "max_depth", "scope_prefix", "scroll", "subdomains",
+              "keep_media", "mobile", "force"]:
         if f in data and data[f]:
             flags[f] = data[f]
+
+    # Repeatable flag: exclude is a list of path prefixes
+    exclude = data.get("exclude")
+    if isinstance(exclude, list):
+        cleaned = [str(e).strip() for e in exclude if str(e).strip()]
+        if cleaned:
+            flags["exclude"] = cleaned
 
     try:
         job_id = start_clone(url, **flags)

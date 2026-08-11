@@ -137,14 +137,22 @@ def _popen(cmd: list[str]) -> subprocess.Popen:
 
 
 def clone(url_or_host: str, **flags) -> subprocess.Popen:
-    """Start a kage clone in the background. Returns the Popen handle."""
+    """Start a kage clone in the background. Returns the Popen handle.
+
+    Flag values: True emits a bare --flag, a list/tuple repeats --flag per
+    item (for kage's repeatable flags like --exclude), other truthy values
+    emit --flag <value>. False/None are skipped.
+    """
     cmd = [KAGE_BIN, "clone", url_or_host]
     for key, val in flags.items():
+        flag = f"--{key.replace('_', '-')}"
         if val is True:
-            cmd.append(f"--{key.replace('_', '-')}")
+            cmd.append(flag)
+        elif isinstance(val, (list, tuple)):
+            for item in val:
+                cmd.extend([flag, str(item)])
         elif val is not False and val is not None:
-            cmd.append(f"--{key.replace('_', '-')}")
-            cmd.append(str(val))
+            cmd.extend([flag, str(val)])
     return _popen(cmd)
 
 

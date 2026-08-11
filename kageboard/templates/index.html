@@ -2,10 +2,11 @@
 {% block title %}Kageboard — Mirrors{% endblock %}
 
 {% block content %}
+<div x-data="cloneForm()">
 <div class="header-row">
   <h1>Mirrors</h1>
   {% if authed %}
-  <button class="btn btn-primary" @click="showClone = true" x-data="{showClone: false}">
+  <button class="btn btn-primary" @click="showClone = true">
     + New Clone
   </button>
   {% else %}
@@ -15,7 +16,7 @@
 
 {% if authed %}
 <!-- Clone panel -->
-<div x-data="cloneForm()" x-show="showClone" x-transition @keydown.escape="showClone = false"
+<div x-show="showClone" x-transition @keydown.escape="showClone = false"
      @clone-done.window="showClone = false; htmx.ajax('GET', '/mirrors', {target: '#mirror-grid'})"
      style="display:none">
   <div class="clone-panel card">
@@ -39,6 +40,22 @@
         <label><input type="checkbox" x-model="scroll"> Scroll (lazy load)</label>
         <label><input type="checkbox" x-model="subdomains"> Subdomains</label>
       </div>
+      <details class="advanced">
+        <summary>Advanced options</summary>
+        <div class="form-group">
+          <label for="clone-scope">Scope prefix</label>
+          <input id="clone-scope" type="text" x-model="scopePrefix" placeholder="/docs — only crawl this path">
+        </div>
+        <div class="form-group">
+          <label for="clone-exclude">Exclude paths</label>
+          <input id="clone-exclude" type="text" x-model="exclude" placeholder="/archive, /tags — comma-separated">
+        </div>
+        <div class="form-row checks">
+          <label><input type="checkbox" x-model="keepMedia"> Keep media/PDFs</label>
+          <label><input type="checkbox" x-model="mobile"> Mobile readability</label>
+          <label><input type="checkbox" x-model="force"> Force re-clone</label>
+        </div>
+      </details>
       <div class="form-actions">
         <button type="button" class="btn btn-ghost" @click="showClone = false">Cancel</button>
         <button type="submit" class="btn btn-primary" :disabled="running">
@@ -60,6 +77,7 @@
   </div>
 </div>
 {% endif %}
+</div>
 
 <!-- Mirror grid -->
 <div id="mirror-grid" hx-get="/mirrors" hx-trigger="load, every 30s" hx-swap="innerHTML">
@@ -78,6 +96,11 @@ function cloneForm() {
     maxDepth: null,
     scroll: false,
     subdomains: false,
+    scopePrefix: '',
+    exclude: '',
+    keepMedia: false,
+    mobile: false,
+    force: false,
     running: false,
     pages: 0,
     pct: 0,
@@ -98,6 +121,12 @@ function cloneForm() {
       if (this.maxDepth) body.max_depth = parseInt(this.maxDepth);
       if (this.scroll) body.scroll = true;
       if (this.subdomains) body.subdomains = true;
+      if (this.scopePrefix.trim()) body.scope_prefix = this.scopePrefix.trim();
+      const excl = this.exclude.split(',').map(s => s.trim()).filter(Boolean);
+      if (excl.length) body.exclude = excl;
+      if (this.keepMedia) body.keep_media = true;
+      if (this.mobile) body.mobile = true;
+      if (this.force) body.force = true;
 
       fetch('/api/clone', {
         method: 'POST',

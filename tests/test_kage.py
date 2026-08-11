@@ -185,6 +185,62 @@ def test_parse_clone_output_singular_page():
     assert result == {"type": "done", "pages": 1, "assets": 5, "errors": 0}
 
 
+# ── clone() command building ──
+
+
+def _capture_clone_cmd(monkeypatch):
+    """Patch _popen and return a list that will receive the built command."""
+    from kageboard import kage as kage_mod
+    captured = []
+
+    class DummyProc:
+        stdout = iter([])
+        returncode = 0
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(kage_mod, "_popen", lambda cmd: captured.append(cmd) or DummyProc())
+    return captured
+
+
+def test_clone_bool_and_value_flags(monkeypatch):
+    """True emits a bare flag, values emit --flag value."""
+    from kageboard.kage import clone
+    captured = _capture_clone_cmd(monkeypatch)
+    clone("https://example.com", scroll=True, max_pages=10, subdomains=False)
+    cmd = captured[0]
+    assert "--scroll" in cmd
+    assert "--max-pages" in cmd
+    assert cmd[cmd.index("--max-pages") + 1] == "10"
+    assert "--subdomains" not in cmd
+
+
+def test_clone_repeatable_exclude_flag(monkeypatch):
+    """List values repeat the flag per item (--exclude a --exclude b)."""
+    from kageboard.kage import clone
+    captured = _capture_clone_cmd(monkeypatch)
+    clone("https://example.com", exclude=["/archive", "/tags"])
+    cmd = captured[0]
+    assert cmd.count("--exclude") == 2
+    assert "/archive" in cmd
+    assert "/tags" in cmd
+    # Each --exclude is immediately followed by its value
+    for i, tok in enumerate(cmd):
+        if tok == "--exclude":
+            assert cmd[i + 1] in ("/archive", "/tags")
+
+
+def test_clone_underscore_to_dash(monkeypatch):
+    """Underscored kwarg names become dashed flags."""
+    from kageboard.kage import clone
+    captured = _capture_clone_cmd(monkeypatch)
+    clone("https://example.com", keep_media=True, scope_prefix="/docs")
+    cmd = captured[0]
+    assert "--keep-media" in cmd
+    assert "--scope-prefix" in cmd
+    assert cmd[cmd.index("--scope-prefix") + 1] == "/docs"
+
+
 # ── _build_mirror tests ──
 
 
