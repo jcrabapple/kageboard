@@ -227,6 +227,20 @@ def api_pack(host: str):
     return jsonify({"job_id": job_id})
 
 
+@app.route("/api/mirrors/<host>/refresh", methods=["POST"])
+@require_auth
+def api_refresh(host: str):
+    """Re-render an existing mirror in place (kage clone --refresh)."""
+    mirror = get_mirror(host)
+    if mirror is None:
+        return jsonify({"error": "not found"}), 404
+    try:
+        job_id = start_clone(f"https://{host}", refresh=True)
+    except KageNotFoundError as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"job_id": job_id})
+
+
 # ═══════════════════════════════════════
 # WebSocket
 # ═══════════════════════════════════════

@@ -11,6 +11,7 @@
     <div class="action-buttons">
       <button class="btn btn-ghost" @click="browse()">Browse</button>
       {% if authed %}
+      <button class="btn btn-ghost" @click="refresh()" :disabled="refreshing">Refresh</button>
       <button class="btn btn-ghost" @click="packMirror('zim')" :disabled="packing">Pack ZIM</button>
       <button class="btn btn-danger-outline" @click="deleteMirror()" :disabled="deleting">Delete</button>
       {% endif %}
@@ -37,6 +38,16 @@
       <div class="stat-label">ZIM</div><div class="stat-val mono">{{ mirror.zim_path }}</div>
     </div>
     {% endif %}
+  </div>
+
+  <!-- Refresh progress -->
+  <div x-show="refreshing" x-transition class="card" style="padding:16px; margin-bottom:16px;">
+    <div class="progress-bar"><div class="fill" :style="`width:${pct}%`"></div></div>
+    <div class="progress-stats">
+      <span x-text="statusText"></span>
+      <span x-text="pages + ' pages'"></span>
+    </div>
+    <pre class="clone-log" x-ref="log" x-text="logLines.slice(-10).join('\n')"></pre>
   </div>
 
   <!-- Browse frame -->
@@ -76,10 +87,75 @@ function detailView(host) {
     browseUrl: '',
     packing: false,
     deleting: false,
+    refreshing: false,
+    pages: 0,
+    pct: 0,
+    statusText: '',
+    logLines: [],
+    ws: null,
 
     browse() {
       this.browseUrl = `/mirrors/${host}/browse/`;
       this.browsing = true;
+    },
+
+    refresh() {
+      this.refreshing = true;
+      this.logLines = [];
+      this.pages = 0;
+      this.pct = 0;
+      this.statusText = 'Starting...';
+
+      fetch(`/api/mirrors/${host}/refresh`, { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          this.statusText = 'Error: ' + data.error;
+          this.refreshing = false;
+          return;
+        }
+        this.connectWs(data.job_id);
+      })
+      .catch(err => {
+        this.statusText = 'Error: ' + err.message;
+        this.refreshing = false;
+      });
+    },
+
+    connectWs(jobId) {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.ws = new WebSocket(`${proto}//${location.host}/ws/clone/${jobId}`);
+      this.ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'output') {
+          this.logLines.push(msg.line);
+          this.$nextTick(() => {
+            const log = this.$refs.log;
+            if (log) log.scrollTop = log.scrollHeight;
+          });
+        } else if (msg.type === 'status') {
+          this.statusText = msg.status === 'running' ? 'Refreshing...' :
+                            msg.status === 'done' ? 'Done!' : 'Error';
+          this.pages = msg.pages;
+          this.pct = Math.min(99, msg.pages * 5);
+          if (msg.status !== 'running') {
+            this.pct = msg.status === 'done' ? 100 : 0;
+            this.ws.close();
+            window.dispatchEvent(new CustomEvent('new-toast', {
+              detail: { msg: `Refresh ${msg.status === 'done' ? 'complete' : 'failed'}: ${host}`, kind: msg.status === 'done' ? 'success' : 'error' }
+            }));
+            if (msg.status === 'done') {
+              setTimeout(() => window.location.reload(), 800);
+            } else {
+              this.refreshing = false;
+            }
+          }
+        }
+      };
+      this.ws.onerror = () => {
+        this.statusText = 'Connection lost';
+        this.refreshing = false;
+      };
     },
 
     packMirror(fmt) {

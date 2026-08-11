@@ -122,6 +122,41 @@ def test_api_job_status_404(client):
     assert r.status_code == 404
 
 
+def test_api_refresh_unauthorized(client, tmp_mirror_dir):
+    """Refresh requires auth."""
+    r = client.post("/api/mirrors/example.com/refresh")
+    assert r.status_code == 401
+
+
+def test_api_refresh_404(client, tmp_mirror_dir, auth_headers):
+    """Refresh 404s for a mirror that doesn't exist."""
+    r = client.post("/api/mirrors/doesnotexist.com/refresh", headers=auth_headers)
+    assert r.status_code == 404
+
+
+def test_api_refresh_starts_clone_job(client, tmp_mirror_dir, auth_headers, monkeypatch):
+    """Refresh kicks off a clone job with --refresh against the mirror's URL."""
+    calls = {}
+
+    def fake_start_clone(url, **flags):
+        calls["url"] = url
+        calls["flags"] = flags
+        return "job-refresh-1"
+
+    monkeypatch.setattr("kageboard.app.start_clone", fake_start_clone)
+    r = client.post("/api/mirrors/example.com/refresh", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.get_json()["job_id"] == "job-refresh-1"
+    assert calls["url"] == "https://example.com"
+    assert calls["flags"] == {"refresh": True}
+
+
+def test_api_refresh_path_traversal(client, tmp_mirror_dir, auth_headers):
+    """Refresh rejects path-traversal hosts."""
+    r = client.post("/api/mirrors/..%2F..%2Fetc/refresh", headers=auth_headers)
+    assert r.status_code == 404
+
+
 def test_api_mirrors_empty(client):
     r = client.get("/api/mirrors")
     assert r.status_code == 200

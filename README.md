@@ -15,6 +15,7 @@ Kage is a fantastic CLI for freezing websites into offline mirrors. Kageboard gi
 - **Clone from the browser** — paste a URL, set scope/depth, watch live progress via WebSocket
 - **Browse mirrors inline** — view mirrored pages through an iframe with the toolbar stripped
 - **Pack to ZIM** — trigger ZIM archive creation from the UI
+- **Refresh mirrors** — re-render an existing mirror in place (`kage clone --refresh`) with live progress
 - **Delete mirrors** — clean up old mirrors with one click
 - **Basic auth** — write operations (clone, delete, pack) behind authentication; read-only endpoints public
 - **Dark mode** — automatic via `prefers-color-scheme` with manual toggle; preference saved to localStorage
@@ -136,6 +137,10 @@ pytest tests/ -v
 - [ ] ZIM viewer integration (serve packed archives in-browser)
 - [ ] Docker image (bundle Kage + Kageboard)
 - [ ] Extension: context menu "Save this page to Kageboard"
+- [ ] Advanced clone options (`--scope-prefix`, `--exclude`, `--keep-media`, `--force`)
+- [ ] Pack formats: binary viewer + desktop app (`--format binary`, `--app`, `--incremental`)
+- [ ] Download packed archives from the UI
+- [ ] Scheduled mirror refreshes
 
 ## License
 
