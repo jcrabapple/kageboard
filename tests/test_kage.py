@@ -241,6 +241,101 @@ def test_clone_underscore_to_dash(monkeypatch):
     assert cmd[cmd.index("--scope-prefix") + 1] == "/docs"
 
 
+# ── pack() command building ──
+
+
+def test_pack_binary_with_incremental(monkeypatch, tmp_path):
+    """Binary packs get an explicit output path and --incremental."""
+    from kageboard import kage as kage_mod
+    monkeypatch.setattr(kage_mod, "DEFAULT_OUT", tmp_path)
+    captured = []
+
+    class DummyProc:
+        stdout = iter([])
+        returncode = 0
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(kage_mod, "_popen", lambda cmd: captured.append(cmd) or DummyProc())
+    kage_mod.pack("example.com", "binary", incremental=True)
+    cmd = captured[0]
+    assert "--format" in cmd
+    assert cmd[cmd.index("--format") + 1] == "binary"
+    assert "-o" in cmd
+    assert cmd[cmd.index("-o") + 1] == str(tmp_path / "example.com.bin")
+    assert "--incremental" in cmd
+
+
+def test_pack_zim_default_output(monkeypatch, tmp_path):
+    """ZIM packs default to <out>/<host>.zim with no --incremental."""
+    from kageboard import kage as kage_mod
+    monkeypatch.setattr(kage_mod, "DEFAULT_OUT", tmp_path)
+    captured = []
+
+    class DummyProc:
+        stdout = iter([])
+        returncode = 0
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(kage_mod, "_popen", lambda cmd: captured.append(cmd) or DummyProc())
+    kage_mod.pack("example.com")
+    cmd = captured[0]
+    assert cmd[cmd.index("-o") + 1] == str(tmp_path / "example.com.zim")
+    assert "--incremental" not in cmd
+
+
+def test_pack_rejects_unknown_format():
+    from kageboard.kage import pack
+    import pytest
+    with pytest.raises(ValueError):
+        pack("example.com", "tarball")
+
+
+# ── get_artifact_path tests ──
+
+
+def test_get_artifact_path_found():
+    from kageboard.kage import get_artifact_path
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td)
+        (out / "example.com").mkdir()
+        (out / "example.com.zim").write_bytes(b"ZIM")
+        (out / "example.com.bin").write_bytes(b"BIN")
+        assert get_artifact_path("example.com", "zim", out) == out / "example.com.zim"
+        assert get_artifact_path("example.com", "binary", out) == out / "example.com.bin"
+
+
+def test_get_artifact_path_missing():
+    from kageboard.kage import get_artifact_path
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td)
+        (out / "example.com").mkdir()
+        assert get_artifact_path("example.com", "zim", out) is None
+
+
+def test_get_artifact_path_rejects_bad_input():
+    from kageboard.kage import get_artifact_path
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td)
+        assert get_artifact_path("..", "zim", out) is None
+        assert get_artifact_path("../etc", "binary", out) is None
+        assert get_artifact_path("example.com", "tarball", out) is None
+
+
+def test_build_mirror_detects_bin():
+    """_build_mirror sets has_bin when <host>.bin sits next to the mirror."""
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td)
+        (out / "site.com").mkdir()
+        (out / "site.com" / "index.html").write_text("<html></html>")
+        (out / "site.com.bin").write_bytes(b"BIN")
+        m = _build_mirror(out / "site.com")
+        assert m.has_bin is True
+        assert m.bin_path == str(out / "site.com.bin")
+        assert m.has_zim is False
+
+
 # ── _build_mirror tests ──
 
 

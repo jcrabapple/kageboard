@@ -443,6 +443,40 @@ body {
 .advanced summary:hover {
   color: var(--text);
 }
+.pack-controls {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.pack-select {
+  padding: 7px 10px;
+  font-size: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  cursor: pointer;
+}
+.pack-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+.pack-inc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pack-inc input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+}
 .form-actions {
   display: flex;
   gap: 8px;

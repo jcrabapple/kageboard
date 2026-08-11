@@ -199,6 +199,62 @@ def test_api_refresh_path_traversal(client, tmp_mirror_dir, auth_headers):
     assert r.status_code == 404
 
 
+def test_api_pack_rejects_bad_format(client, tmp_mirror_dir, auth_headers):
+    r = client.post("/api/mirrors/example.com/pack", json={"format": "tarball"},
+                    headers=auth_headers)
+    assert r.status_code == 400
+
+
+def test_api_pack_unknown_host_404(client, tmp_mirror_dir, auth_headers):
+    r = client.post("/api/mirrors/nope.com/pack", json={"format": "zim"},
+                    headers=auth_headers)
+    assert r.status_code == 404
+
+
+def test_api_pack_forwards_format_and_incremental(client, tmp_mirror_dir, auth_headers, monkeypatch):
+    calls = {}
+
+    def fake_start_pack(host, fmt, incremental=False):
+        calls["host"] = host
+        calls["fmt"] = fmt
+        calls["incremental"] = incremental
+        return "job-pack-1"
+
+    monkeypatch.setattr("kageboard.app.start_pack", fake_start_pack)
+    r = client.post("/api/mirrors/example.com/pack",
+                    json={"format": "binary", "incremental": True},
+                    headers=auth_headers)
+    assert r.status_code == 200
+    assert r.get_json()["job_id"] == "job-pack-1"
+    assert calls == {"host": "example.com", "fmt": "binary", "incremental": True}
+
+
+def test_download_zim(client, tmp_mirror_dir):
+    """Packed artifacts download without auth (read-only, like browse)."""
+    (tmp_mirror_dir / "example.com.zim").write_bytes(b"FAKEZIM")
+    r = client.get("/api/mirrors/example.com/download/zim")
+    assert r.status_code == 200
+    assert r.data == b"FAKEZIM"
+    assert "attachment" in r.headers.get("Content-Disposition", "")
+
+
+def test_download_binary(client, tmp_mirror_dir):
+    (tmp_mirror_dir / "example.com.bin").write_bytes(b"FAKEBIN")
+    r = client.get("/api/mirrors/example.com/download/binary")
+    assert r.status_code == 200
+    assert r.data == b"FAKEBIN"
+
+
+def test_download_missing_404(client, tmp_mirror_dir):
+    r = client.get("/api/mirrors/example.com/download/zim")
+    assert r.status_code == 404
+
+
+def test_download_rejects_bad_input(client, tmp_mirror_dir):
+    assert client.get("/api/mirrors/example.com/download/tarball").status_code == 404
+    assert client.get("/api/mirrors/..%2F..%2Fetc/download/zim").status_code == 404
+
+
 def test_api_mirrors_empty(client):
     r = client.get("/api/mirrors")
     assert r.status_code == 200

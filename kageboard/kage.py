@@ -56,6 +56,14 @@ class Mirror:
     cloned_at: str = ""  # ISO timestamp
     has_zim: bool = False
     zim_path: str | None = None
+    has_bin: bool = False
+    bin_path: str | None = None
+
+
+def _artifact_file(host: str, kind: str, out: Path) -> Path:
+    """Path where a packed artifact for *host* lives inside *out*."""
+    ext = "zim" if kind == "zim" else "bin"
+    return out / f"{host}.{ext}"
 
 
 def _build_mirror(path: Path) -> Mirror:
@@ -73,8 +81,10 @@ def _build_mirror(path: Path) -> Mirror:
         except (json.JSONDecodeError, KeyError):
             pass
 
-    zim = path.parent / f"{host}.zim"
+    zim = _artifact_file(host, "zim", path.parent)
     has_zim = zim.exists()
+    bin_ = _artifact_file(host, "binary", path.parent)
+    has_bin = bin_.exists()
 
     return Mirror(
         host=host,
@@ -84,7 +94,25 @@ def _build_mirror(path: Path) -> Mirror:
         cloned_at=cloned_at,
         has_zim=has_zim,
         zim_path=str(zim) if has_zim else None,
+        has_bin=has_bin,
+        bin_path=str(bin_) if has_bin else None,
     )
+
+
+def get_artifact_path(host: str, kind: str, out_dir: Path | None = None) -> Path | None:
+    """Resolve a packed artifact (zim|binary) for download.
+
+    Returns None for unknown kinds, traversal attempts, or missing files.
+    """
+    if kind not in ("zim", "binary"):
+        return None
+    out = out_dir or DEFAULT_OUT
+    if _resolve_host_path(host, out) is None:
+        return None
+    path = _artifact_file(host, kind, out).resolve()
+    if not path.is_relative_to(out.resolve()) or not path.exists():
+        return None
+    return path
 
 
 def list_mirrors(out_dir: Path | None = None) -> list[Mirror]:
@@ -161,11 +189,16 @@ def serve(host_or_dir: str, addr: str = "127.0.0.1:8880") -> subprocess.Popen:
     return _popen([KAGE_BIN, "serve", host_or_dir, "--addr", addr])
 
 
-def pack(host: str, fmt: str = "zim", output: str | None = None) -> subprocess.Popen:
-    """Pack a mirror into ZIM or binary."""
-    cmd = [KAGE_BIN, "pack", host, "--format", fmt]
-    if output:
-        cmd.extend(["-o", output])
+def pack(host: str, fmt: str = "zim", output: str | None = None,
+         incremental: bool = False) -> subprocess.Popen:
+    """Pack a mirror into ZIM or binary. Artifacts land next to the mirror
+    as <host>.zim / <host>.bin unless *output* overrides the path."""
+    if fmt not in ("zim", "binary"):
+        raise ValueError(f"unsupported pack format: {fmt!r}")
+    out_path = output or str(_artifact_file(host, fmt, DEFAULT_OUT))
+    cmd = [KAGE_BIN, "pack", host, "--format", fmt, "-o", out_path]
+    if incremental:
+        cmd.append("--incremental")
     return _popen(cmd)
 
 

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import mimetypes
 
-from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for, send_file
 
-from .kage import DEFAULT_OUT, list_mirrors, get_mirror, delete_mirror, kage_version, KageNotFoundError
+from .kage import DEFAULT_OUT, list_mirrors, get_mirror, delete_mirror, kage_version, KageNotFoundError, get_artifact_path
 from .manager import start_clone, get_job, get_job_raw, get_jobs, start_pack
 from .auth import (
     init_auth,
@@ -228,11 +228,25 @@ def api_delete_mirror(host: str):
 def api_pack(host: str):
     data = request.get_json() or {}
     fmt = data.get("format", "zim")
+    if fmt not in ("zim", "binary"):
+        return jsonify({"error": "format must be 'zim' or 'binary'"}), 400
+    if get_mirror(host) is None:
+        return jsonify({"error": "not found"}), 404
+    incremental = bool(data.get("incremental"))
     try:
-        job_id = start_pack(host, fmt)
+        job_id = start_pack(host, fmt, incremental=incremental)
     except KageNotFoundError as e:
         return jsonify({"error": str(e)}), 500
     return jsonify({"job_id": job_id})
+
+
+@app.route("/api/mirrors/<host>/download/<kind>")
+def api_download(host: str, kind: str):
+    """Download a packed artifact (zim|binary). Read-only like browse."""
+    path = get_artifact_path(host, kind)
+    if path is None:
+        return jsonify({"error": "not found"}), 404
+    return send_file(path, as_attachment=True)
 
 
 @app.route("/api/mirrors/<host>/refresh", methods=["POST"])

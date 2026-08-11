@@ -10,9 +10,25 @@
     </div>
     <div class="action-buttons">
       <button class="btn btn-ghost" @click="browse()">Browse</button>
+      {% if mirror.has_zim %}
+      <a class="btn btn-ghost" href="/api/mirrors/{{ mirror.host }}/download/zim">⬇ ZIM</a>
+      {% endif %}
+      {% if mirror.has_bin %}
+      <a class="btn btn-ghost" href="/api/mirrors/{{ mirror.host }}/download/binary">⬇ Viewer</a>
+      {% endif %}
       {% if authed %}
       <button class="btn btn-ghost" @click="refresh()" :disabled="refreshing">Refresh</button>
-      <button class="btn btn-ghost" @click="packMirror('zim')" :disabled="packing">Pack ZIM</button>
+      <span class="pack-controls">
+        <select x-model="packFmt" class="pack-select" :disabled="packing">
+          <option value="zim">ZIM</option>
+          <option value="binary">Binary viewer</option>
+        </select>
+        <label class="pack-inc" title="Reuse compression cache — faster re-packs">
+          <input type="checkbox" x-model="packInc" :disabled="packing"> incremental
+        </label>
+        <button class="btn btn-ghost" @click="packMirror()" :disabled="packing"
+                x-text="packing ? 'Packing…' : 'Pack'"></button>
+      </span>
       <button class="btn btn-danger-outline" @click="deleteMirror()" :disabled="deleting">Delete</button>
       {% endif %}
     </div>
@@ -86,6 +102,8 @@ function detailView(host) {
     browsing: false,
     browseUrl: '',
     packing: false,
+    packFmt: 'zim',
+    packInc: false,
     deleting: false,
     refreshing: false,
     pages: 0,
@@ -158,23 +176,51 @@ function detailView(host) {
       };
     },
 
-    packMirror(fmt) {
+    packMirror() {
       this.packing = true;
       fetch(`/api/mirrors/${host}/pack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ format: fmt })
+        body: JSON.stringify({ format: this.packFmt, incremental: this.packInc })
       })
       .then(r => r.json())
       .then(data => {
         if (data.job_id) {
           window.dispatchEvent(new CustomEvent('new-toast', {
-            detail: { msg: 'Pack job started…', kind: 'info' }
+            detail: { msg: `Pack job started (${this.packFmt})…`, kind: 'info' }
           }));
+          this.pollPack(data.job_id);
+        } else {
+          window.dispatchEvent(new CustomEvent('new-toast', {
+            detail: { msg: 'Pack failed: ' + (data.error || 'unknown error'), kind: 'error' }
+          }));
+          this.packing = false;
         }
-        this.packing = false;
       })
       .catch(() => { this.packing = false; });
+    },
+
+    pollPack(jobId) {
+      const timer = setInterval(() => {
+        fetch(`/api/jobs/${jobId}`)
+        .then(r => r.json())
+        .then(job => {
+          if (job.status && job.status !== 'running') {
+            clearInterval(timer);
+            this.packing = false;
+            window.dispatchEvent(new CustomEvent('new-toast', {
+              detail: {
+                msg: `Pack ${job.status === 'done' ? 'complete' : 'failed'}: ${host} (${this.packFmt})`,
+                kind: job.status === 'done' ? 'success' : 'error'
+              }
+            }));
+            if (job.status === 'done') {
+              setTimeout(() => window.location.reload(), 800);
+            }
+          }
+        })
+        .catch(() => {});
+      }, 2000);
     },
 
     deleteMirror() {

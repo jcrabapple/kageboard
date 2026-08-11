@@ -4,6 +4,7 @@ import time
 import json
 import subprocess
 import threading
+import uuid
 from pathlib import Path
 
 from .kage import (
@@ -31,7 +32,7 @@ def start_clone(url: str, **flags) -> str:
     Raises KageNotFoundError if the kage binary is missing.
     """
     host = url.replace("https://", "").replace("http://", "").rstrip("/").split("/")[0]
-    job_id = f"clone-{host}-{int(time.time())}"
+    job_id = f"clone-{host}-{int(time.time())}-{uuid.uuid4().hex[:6]}"
 
     proc = clone(url, **flags)  # may raise KageNotFoundError
     job = {
@@ -117,18 +118,20 @@ def start_serve(host: str, addr: str = "127.0.0.1:8890") -> subprocess.Popen:
     return serve(host, addr)
 
 
-def start_pack(host: str, fmt: str = "zim") -> str:
+def start_pack(host: str, fmt: str = "zim", incremental: bool = False) -> str:
     """Start a pack job, return job ID.
 
-    Raises KageNotFoundError if the kage binary is missing.
+    Raises KageNotFoundError if the kage binary is missing,
+    ValueError for an unsupported format.
     """
-    job_id = f"pack-{host}-{int(time.time())}"
+    job_id = f"pack-{host}-{int(time.time())}-{uuid.uuid4().hex[:6]}"
 
-    proc = pack(host, fmt)  # may raise KageNotFoundError
+    proc = pack(host, fmt, incremental=incremental)
     job = {
         "id": job_id,
         "host": host,
         "format": fmt,
+        "incremental": incremental,
         "status": "running",
         "proc": proc,
         "lines": [],
