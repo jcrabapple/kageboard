@@ -4,6 +4,9 @@ Web dashboard for [Kage](https://github.com/tamnd/kage) — manage, clone, brows
 
 Kage is a fantastic CLI for freezing websites into offline mirrors. Kageboard gives it a web UI so you can manage your library of mirrors without remembering flags.
 
+![Kageboard Dashboard](docs/dashboard.png)
+![Mirror Detail](docs/mirror-detail.png)
+
 ## Features
 
 - **Mirror library** — browse all your cloned sites in a grid with page counts and sizes
