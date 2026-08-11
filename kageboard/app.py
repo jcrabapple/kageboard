@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, jsonify, Response, session, r
 
 from .kage import DEFAULT_OUT, list_mirrors, get_mirror, delete_mirror, kage_version, KageNotFoundError, get_artifact_path
 from .manager import start_clone, get_job, get_job_raw, get_jobs, start_pack
+from . import scheduler
 from .auth import (
     init_auth,
     get_credentials,
@@ -249,6 +250,29 @@ def api_download(host: str, kind: str):
     return send_file(path, as_attachment=True)
 
 
+@app.route("/api/mirrors/<host>/schedule", methods=["GET"])
+def api_get_schedule(host: str):
+    """Schedule info for a mirror (public, read-only)."""
+    if get_mirror(host) is None:
+        return jsonify({"error": "not found"}), 404
+    entry = scheduler.get_schedule(host)
+    return jsonify(entry or {"interval": "off", "last_run": None, "last_status": None})
+
+
+@app.route("/api/mirrors/<host>/schedule", methods=["PUT"])
+@require_auth
+def api_set_schedule(host: str):
+    if get_mirror(host) is None:
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json() or {}
+    interval = data.get("interval", "off")
+    try:
+        entry = scheduler.set_schedule(host, interval)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(entry or {"interval": "off", "last_run": None, "last_status": None})
+
+
 @app.route("/api/mirrors/<host>/refresh", methods=["POST"])
 @require_auth
 def api_refresh(host: str):
@@ -327,6 +351,10 @@ def main():
     if not args.username and not args.password:
         print(f"🔐 Generated credentials — username: {user}  password: {pwd}")
         print("   Set KAGEBOARD_USERNAME / KAGEBOARD_PASSWORD env vars to override.")
+
+    import os
+    tick = int(os.environ.get("KAGEBOARD_SCHED_TICK", scheduler.DEFAULT_TICK))
+    scheduler.start(tick_seconds=tick)
 
     app.run(host=args.host, port=args.port, debug=args.debug)
 

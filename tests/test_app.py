@@ -255,6 +255,48 @@ def test_download_rejects_bad_input(client, tmp_mirror_dir):
     assert client.get("/api/mirrors/..%2F..%2Fetc/download/zim").status_code == 404
 
 
+def test_schedule_get_default_off(client, tmp_mirror_dir):
+    r = client.get("/api/mirrors/example.com/schedule")
+    assert r.status_code == 200
+    assert r.get_json()["interval"] == "off"
+
+
+def test_schedule_get_404_unknown_host(client, tmp_mirror_dir):
+    assert client.get("/api/mirrors/nope.com/schedule").status_code == 404
+
+
+def test_schedule_put_requires_auth(client, tmp_mirror_dir):
+    r = client.put("/api/mirrors/example.com/schedule", json={"interval": "daily"})
+    assert r.status_code == 401
+
+
+def test_schedule_put_and_get(client, tmp_mirror_dir, auth_headers):
+    r = client.put("/api/mirrors/example.com/schedule", json={"interval": "daily"},
+                   headers=auth_headers)
+    assert r.status_code == 200
+    assert r.get_json()["interval"] == "daily"
+
+    r = client.get("/api/mirrors/example.com/schedule")
+    assert r.get_json()["interval"] == "daily"
+
+    # And off clears it
+    r = client.put("/api/mirrors/example.com/schedule", json={"interval": "off"},
+                   headers=auth_headers)
+    assert r.get_json()["interval"] == "off"
+
+
+def test_schedule_put_rejects_bad_interval(client, tmp_mirror_dir, auth_headers):
+    r = client.put("/api/mirrors/example.com/schedule", json={"interval": "hourly"},
+                   headers=auth_headers)
+    assert r.status_code == 400
+
+
+def test_schedule_put_404_unknown_host(client, tmp_mirror_dir, auth_headers):
+    r = client.put("/api/mirrors/nope.com/schedule", json={"interval": "daily"},
+                   headers=auth_headers)
+    assert r.status_code == 404
+
+
 def test_api_mirrors_empty(client):
     r = client.get("/api/mirrors")
     assert r.status_code == 200

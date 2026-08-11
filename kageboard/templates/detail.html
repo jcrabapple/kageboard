@@ -18,6 +18,14 @@
       {% endif %}
       {% if authed %}
       <button class="btn btn-ghost" @click="refresh()" :disabled="refreshing">Refresh</button>
+      <span class="pack-controls" title="Automatically re-render this mirror on a schedule">
+        <label class="pack-inc">auto-refresh</label>
+        <select x-model="scheduleInterval" class="pack-select" @change="saveSchedule()">
+          <option value="off">Off</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </span>
       <span class="pack-controls">
         <select x-model="packFmt" class="pack-select" :disabled="packing">
           <option value="zim">ZIM</option>
@@ -55,6 +63,8 @@
     </div>
     {% endif %}
   </div>
+
+  <div class="schedule-status muted" x-show="scheduleText" x-text="scheduleText" style="margin: -6px 0 14px; font-size: 0.8rem;"></div>
 
   <!-- Refresh progress -->
   <div x-show="refreshing" x-transition class="card" style="padding:16px; margin-bottom:16px;">
@@ -106,11 +116,61 @@ function detailView(host) {
     packInc: false,
     deleting: false,
     refreshing: false,
+    scheduleInterval: 'off',
+    scheduleText: '',
     pages: 0,
     pct: 0,
     statusText: '',
     logLines: [],
     ws: null,
+
+    init() {
+      this.loadSchedule();
+    },
+
+    loadSchedule() {
+      fetch(`/api/mirrors/${host}/schedule`)
+      .then(r => r.json())
+      .then(data => {
+        this.scheduleInterval = data.interval || 'off';
+        this.scheduleText = this.describeSchedule(data);
+      })
+      .catch(() => {});
+    },
+
+    describeSchedule(data) {
+      if (!data.last_run) return '';
+      const when = new Date(data.last_run * 1000).toLocaleString();
+      const status = data.last_status ? ` — ${data.last_status}` : ' — running';
+      return `Last auto-refresh: ${when}${status}`;
+    },
+
+    saveSchedule() {
+      fetch(`/api/mirrors/${host}/schedule`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interval: this.scheduleInterval })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          window.dispatchEvent(new CustomEvent('new-toast', {
+            detail: { msg: 'Schedule failed: ' + data.error, kind: 'error' }
+          }));
+          return;
+        }
+        this.scheduleText = this.describeSchedule(data);
+        window.dispatchEvent(new CustomEvent('new-toast', {
+          detail: {
+            msg: this.scheduleInterval === 'off'
+              ? `Auto-refresh off: ${host}`
+              : `Auto-refresh ${this.scheduleInterval}: ${host}`,
+            kind: 'success'
+          }
+        }));
+      })
+      .catch(() => {});
+    },
 
     browse() {
       this.browseUrl = `/mirrors/${host}/browse/`;
